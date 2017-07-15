@@ -1,0 +1,6 @@
+#!/usr/bin/env node
+
+// ```bash
+// azura-ssl <command> [options]
+// ```
+require('../dist/cli.js');
