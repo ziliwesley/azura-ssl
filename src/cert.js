@@ -4,7 +4,7 @@
  * provide wrapper functions to create and sign 
  * SSL certificates
  */
-import { pki, md } from 'node-forge';
+import { asn1, pki, md, pkcs12 } from 'node-forge';
 import Promise from 'bluebird';
 import { isString } from 'lodash';
 import { outputFile, readFile } from 'fs-extra';
@@ -55,7 +55,21 @@ const SERVER_EXTENSION_SET = [{
 }, {
     name: 'extKeyUsage',
     critical: true,
-    serverAuth: true,
+    serverAuth: true
+}];
+
+const CLIENT_EXTENSION_SET = [{
+    name: 'basicConstraints',
+    critical: true,
+    cA: false
+}, {
+    name: 'keyUsage',
+    critical: true,
+    digitalSignature: true,
+    keyEncipherment: true
+}, {
+    name: 'extKeyUsage',
+    critical: true,
     clientAuth: true
 }];
 
@@ -89,6 +103,18 @@ export function writeCertificate(cert, certPath) {
 }
 
 /**
+ * Save p12 archive to the given path
+ * @param  {P12Archive} p12         archive to be saved
+ * @param  {string}     p12Path     path of the archive
+ * @return {Promise}
+ */
+export function writeP12Archive(p12, p12Path) {
+    return outputFileAsync(p12Path,
+        asn1.toDer(p12).getBytes(),
+        { encoding: 'binary' });
+}
+
+/**
  * Read certificate content from given path
  * @param  {string} certPath path of the PEM format certificate
  * @return {Promise}
@@ -119,6 +145,34 @@ export function readPrivateKey(keyPath, passphrase) {
                 return pki.privateKeyFromPem(pem);
             }
         });
+}
+
+/**
+ * Create PKCS#12 archive
+ * @param  {PrivateKey}     options.privateKey   private key of the certificate
+ * @param  {Certificate}    options.cert         certificate signed
+ * @param  {string}         options.passphrase   password to encrypt the archive
+ * @param  {Certificate}    options.CACert       issuer certificate
+ * @param  {string}         options.friendlyName displayed in list boxes by software importing the file
+ * @return {Promise}
+ */
+export function createP12Archive({
+    privateKey, cert, passphrase, CACert, friendlyName}) {
+    const certChain = [ cert ];
+    const options = {
+        // for Chrome/Firefox/iOS/similar users
+        algorithm: '3des'
+    };
+
+    if (CACert) {
+        certChain.push(CACert);
+    }
+
+    if (isString(friendlyName) && friendlyName.length > 0) {
+        options.friendlyName = friendlyName;
+    }
+
+    return pkcs12.toPkcs12Asn1(privateKey, certChain, passphrase, options);
 }
 
 /**
@@ -181,5 +235,6 @@ export function signCertificate({ cert, CAKey, CACert }) {
 
 export {
     CA_EXTENSION_SET,
-    SERVER_EXTENSION_SET
+    SERVER_EXTENSION_SET,
+    CLIENT_EXTENSION_SET
 }
